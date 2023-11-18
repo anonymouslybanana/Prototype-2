@@ -28,6 +28,14 @@ yyyryy
  y  y
 
     `,
+ `
+lll ll
+l ll l
+l ll l
+l ll l
+l ll l
+ll lll
+`,
 ];
 
 options = {
@@ -46,33 +54,62 @@ let rockSpawns;
 let nextRockSpawnDist;
 /** @type {{pos: Vector, vy: number, size: number, speed: number}[]} */
 let rocks;
+/** @type {{pos: Vector, vy: number, speed: number, mode: "fall" | "slide", angle: number }[]} */
+let slidingRocks;
+let slidingRocksTicks;
 /** @type {{pos: Vector, vx: number, shotTicks: number}} */
 let player;
-/** @type {{pos: Vector, vx: number}[]} */
+/** @type {{pos: Vector, vx: number, angle: number}[]} */
 let shots;
+/** @type {Vector} */
+let distance;
 let lx;
 let multiplier;
 let counter;
+let decider;
+let mode;
 
 function update() {
   if (!ticks) {
     rockSpawns = [];
     nextRockSpawnDist = 0;
     rocks = [];
+    slidingRocks = [];
+    slidingRocksTicks = 0;
+    distance = vec();
     player = { pos: vec(10, 87), vx: 0, shotTicks: 0 };
     shots = [];
     lx = 50;
     multiplier = 1;
+    decider = 0;
+    mode = "run";
   }
+  slidingRocksTicks -= sqrt(difficulty);
   let scr = difficulty * 0.1;
   if (player.pos.x > 30) {
     scr += (player.pos.x - 30) * 0.05;
   }
+  if (slidingRocksTicks < 0) {
+    play("laser");
+    const size = rnd(5, 15);
+    let interval = rnd(10, 50) / difficulty;
+    const speed = (rnd(2, 3) / sqrt(size)) * sqrt(difficulty);
+    interval /= sqrt(speed) / sqrt(size);
+    color("yellow");
+    slidingRocks.push({
+      pos: vec(200),
+      vy: 0,
+      speed: speed,
+      mode: "fall",
+      angle: rnd(interval),
+    });
+    slidingRocksTicks += rndi(30, 90);
+  }
 
   //color("blue");
   //rect(0, 100, 100, 10);
-  console.log("player position: " + player.pos.x);
-  console.log("player vx: " + player.vx);
+  //console.log("player position: " + player.pos.x);
+  //console.log("player vx: " + player.vx);
 
   if(player.vx != 0){
     counter += 1;
@@ -91,8 +128,13 @@ function update() {
     }
     if (player.shotTicks < 0) {
       play("laser");
-      shots.push({ pos: vec(player.pos), vx: 2 * difficulty });
+      color("purple");
+      shots.push({ pos: vec(player.pos), vx: 2 * difficulty, angle: floor(rnd(1, 360))});
       player.shotTicks = 10 / difficulty;
+      shots.filter((s) =>{
+        s.angle += rnd(1, sqrt(difficulty)) * sqrt(difficulty) * 0.2
+        char("s", s.pos, { rotation: 3 - floor(s.angle % 4) });
+      })
     }
   } else if (input.isJustReleased) {
     play("select");
@@ -106,6 +148,30 @@ function update() {
     box(s.pos, 6, 3);
     return s.pos.y < 0;
   });
+
+  distance.x = sqrt(sqrt(difficulty))/100 * (input.isPressed ? 1 : 2);
+  addScore(distance.x - sqrt(sqrt(difficulty))/100);
+
+  slidingRocks = slidingRocks.filter((r) => {
+    if (r.mode === "fall") {
+      r.vy += r.speed * 0.2;
+      r.vy *= 0.92;
+      r.pos.y += r.vy * sqrt(sqrt(difficulty));
+      if (r.pos.y > 85) {
+        //play("select");
+        r.pos.y = 86;
+        r.mode = "slide";
+  
+      }
+    } else {
+      r.pos.x -= r.speed * sqrt(difficulty);
+      r.angle += r.speed * sqrt(difficulty) * 0.2;
+    }
+    r.pos.x -= distance.x;
+    char("c", r.pos, { rotation: 3 - floor(r.angle % 4) });
+    return r.pos.x > -5;
+   });
+
   nextRockSpawnDist -= scr;
   if (nextRockSpawnDist < 0) {
     const size = rnd(5, 15);
@@ -121,6 +187,10 @@ function update() {
       ticks: rnd(interval),
     });
     nextRockSpawnDist += rnd(50, 60);
+    //decider = 1;
+    //decider = floor(rnd(1, 15));
+    //if(decider == 1){
+    //}
   }
   remove(rockSpawns, (r) => {
     r.x -= scr;
@@ -162,19 +232,26 @@ function update() {
       return true;
     }
   });
+
   color("black");
   if (
     char(
       input.isPressed ? "b" : addWithCharCode("a", floor(ticks / 20) % 2),
       player.pos
-    ).isColliding.rect.light_black ||
+    ).isColliding.rect.light_black || 
     player.pos.x < -2
   ) {
     play("explosion");
     end();
   }
+
+
   color("transparent");
   remove(shots, (s) => {
     return box(s.pos, 6, 3).isColliding.rect.light_black;
+  });
+  color("transparent");
+  remove(shots, (s) => {
+    return box(s.pos, 6, 3).isColliding.char.a;
   });
 }
