@@ -245,7 +245,6 @@ function update() {
     end();
   }
 
-
   color("transparent");
   remove(shots, (s) => {
     return box(s.pos, 6, 3).isColliding.rect.light_black;
